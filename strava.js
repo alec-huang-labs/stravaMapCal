@@ -6,9 +6,9 @@ function reAuthPersonal(){
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            client_id: '54733',
-            client_secret: '94390e3fb81c4de14d55c4983dc20388cbe628ef',
-            refresh_token: '0cec6481e41265ed524b13a27262b3a4a74ee797',
+            client_id: myID,
+            client_secret: mySecret,
+            refresh_token: myToken,
             grant_type: 'refresh_token'
         })
     })
@@ -33,8 +33,8 @@ function getActivities(res) {
             });
             console.log(activityData.length)
             console.log(activityData)
-            let numRuns = activityData.length;
             let paceArr = []
+            let distArr = []
             for(let i = 0; i < activityData.length; i ++){
                 let coordinates = L.Polyline.fromEncoded(activityData[i].map.summary_polyline).getLatLngs();
                 L.polyline(
@@ -46,8 +46,11 @@ function getActivities(res) {
                 ).addTo(map)
                 let distance = activityData[i].distance;
                 let time = activityData[i].moving_time;
+                distArr.push([new Date(activityData[i].start_date), distance])
                 paceArr.push([new Date(activityData[i].start_date), paceConverter(distance, time)])
             }
+            console.log(paceArr)
+            console.log(distArr)
             //--------------------------
             let minDate = d3.min(paceArr, (d) => new Date(d[0]))
             let maxDate = d3.max(paceArr, (d) => new Date(d[0]))
@@ -64,7 +67,7 @@ function getActivities(res) {
             months = d3.timeMonth.range(d3.timeMonth.floor(minDate), maxDate);
             //minDate returns the smallest date, maxDate returns the largest date 
             console.log(months);    //returns the first day of everymonth in range
-            const canvas = d3.select("#graph")
+            const paceCanvas = d3.select("#pace-graph")
                                 //svg for each month
                                 .selectAll("svg")
                                 .data(months)
@@ -77,8 +80,7 @@ function getActivities(res) {
                                     console.log(columns)
                                     return ((cellSize * columns) + cellMargin * (columns + 1));
                                 })
-                                //.append("g")
-            canvas.append("text")
+            paceCanvas.append("text")
                     .attr("class", "name")
                     .attr("y", (cellSize * 7) + (cellMargin * 8) + 15 )
                     .attr("x", function(d) {
@@ -87,7 +89,7 @@ function getActivities(res) {
                     })
                     .attr("text-anchor", "middle")
                     .text((d) => monthName(d))
-            let rect = canvas.selectAll("rect")
+            let paceRect = paceCanvas.selectAll("rect")
                             //dataset is Array of the first days of every month
                             .data(function(d,i) {
                                 console.log(d3.timeDays(d, new Date(d.getFullYear(), d.getMonth()+1, 1)))
@@ -110,68 +112,69 @@ function getActivities(res) {
                                 d3.select(this).classed('hover', false);
                             })
                             .datum(format)
-            rect.append("title")
+            paceRect.append("title")
                 .text((d) => titleFormat(new Date(d)))
             
-            var lookup = d3.nest()
+            var paceLookup = d3.nest()
                             .key((d) => format(new Date(d[0])))
                             .rollup(function(d) { return d3.mean(d, (d) => d[1])})
                             .object(paceArr)
-            console.log(lookup)
-            console.log(Object.values(lookup))
+            console.log(paceLookup)
+            console.log(Object.values(paceLookup))
             //object with dates as properties and speed as values
 
-            const fastest =  Math.floor(Math.min(...Object.values(lookup)));
-            const slowest = Math.ceil(Math.max(...Object.values(lookup)));
+            const fastest =  Math.floor(Math.min(...Object.values(paceLookup)));
+            const slowest = Math.ceil(Math.max(...Object.values(paceLookup)));
 
-            //console.log(d3.extent(Object.values(lookup)))
-            var scale = d3.scaleLinear()
+            //console.log(d3.extent(Object.values(paceLookup)))
+            var paceScale = d3.scaleLinear()
                              .domain([fastest, slowest])
                              .range([0,255]);
-            rect.filter(function(d) {
-                    //console.log(d in lookup); 
-                    return d in lookup;
+            paceRect.filter(function(d) {
+                    //console.log(d in paceLookup); 
+                    return d in paceLookup;
                 })
                 .style("fill", function(d) { 
-                    console.log(`${scale(lookup[d])}`);
-                    return speedColor(scale(lookup[d])); 
+                    //console.log(`${scale(paceLookup[d])}`);
+                    return speedColor(paceScale(paceLookup[d])); 
                 })
                 .select("title")
-                .text(function(d) { return titleFormat(new Date(d)) + "\n" +  numToMins(lookup[d]) + " min/mile"; });    
-            
-            //For the min, you round down. For the max, you round up
-            // const fastest =  Math.ceil(Math.min(...Object.values(lookup)));
-            // const slowest = Math.ceil(Math.max(...Object.values(lookup)));
-            console.log(fastest, slowest)
-            let keyArr = [];
-            for (let i = slowest; i >= fastest; i--){
-                keyArr.push([(i-fastest), i])
-            }
-            console.log(keyArr)
+                .text(function(d) { return titleFormat(new Date(d)) + "\n" +  numToMins(paceLookup[d]) + " min/mile"; });    
 
-            const keyCanvas = d3.select("#key")
-                                .append("svg")
-                                .attr("width", 150)
-                                .attr("height", 100)
-            
-            keyCanvas.selectAll("text")
-                                .data(keyArr)
-                                .enter()
-                                .append("text")
-                                .attr("class", "name")
-                                .attr("fill", "black")
-                                .attr("y", 70)
-                                .attr("x", (d) => cellSize/2 + (d[0] * cellSize) + (d[0] * cellMargin) + cellMargin)
-                                .text((d) => d[1])
-                                .attr("text-anchor", "middle")
+            //For the min, you round down. For the max, you round up
+
+            //change this so that the slowest (11) is first and fastest (6) is last
+            console.log(fastest, slowest)
+            let oldPaceKeyArr = [];
+            for (let i = slowest; i >= fastest; i--){
+                oldPaceKeyArr.push([(i-fastest), i])
+            }
+            paceKeyArr = oldPaceKeyArr.reverse()
+            console.log(paceKeyArr)
+
+            const paceKeyCanvas = d3.select("#pace-key")
+                                    .append("svg")
+                                    .attr("width", 150)
+                                    .attr("height", 100)
                                 
-            let keyRect = keyCanvas.selectAll("rect")
-                                    .data(keyArr)
+            paceKeyCanvas.selectAll("text")
+                        .data(paceKeyArr)
+                        .enter()
+                        .append("text")
+                        .attr("class", "name")
+                        .attr("fill", "black")
+                        .attr("y", 70)
+                        .attr("x", (d) => cellSize/2 + (d[0] * cellSize) + (d[0] * cellMargin) + cellMargin)
+                        .text((d) => d[1])
+                        .attr("text-anchor", "middle")
+                                
+            let paceKeyRect = paceKeyCanvas.selectAll("rect")
+                                    .data(paceKeyArr)
                                     .enter()
                                     .append("rect")
                                     .attr("width", cellSize).attr("height", cellSize)
                                     .attr("fill", (d) => {
-                                        return speedColor(scale(d[1]))
+                                        return speedColor(paceScale(d[1]))
                                     })  
                                     .attr("x", (d) => (d[0] * cellSize) + (d[0] * cellMargin) + cellMargin)
                                     .attr("y", 30)
@@ -182,16 +185,150 @@ function getActivities(res) {
                                     .on("mouseout", function(d) {
                                         d3.select(this).classed('hover', false);
                                     })  
-            keyRect.append("title")
+            paceKeyRect.append("title")
                     .text((d) => `${d[1]} min/mile`)
                                          
-            keyCanvas.append("text")
+            paceKeyCanvas.append("text")
                         .attr("class", "name") 
                         .attr("y", 20)       
-                        .attr("x", ((keyArr.length * cellSize) + (keyArr.length * cellMargin) + cellMargin) / 2)
+                        .attr("x", ((paceKeyArr.length * cellSize) + (paceKeyArr.length * cellMargin) + cellMargin) / 2)
                         .text("Pace (Min/Mile)")    
                         .attr("text-anchor", "middle")
             
+            
+            const distCanvas = d3.select("#dist-graph")
+                                //svg for each month
+                                .selectAll("svg")
+                                .data(months)
+                                .enter()
+                                .append("svg")
+                                .attr("class", "month")
+                                .attr("height", ((cellSize * 7) + (cellMargin * 8) + 20))
+                                .attr("width", function(d) {
+                                    let columns = weeksInMonth(d);
+                                    console.log(columns)
+                                    return ((cellSize * columns) + cellMargin * (columns + 1));
+                                })
+            distCanvas.append("text")
+                        .attr("class", "name")
+                        .attr("y", (cellSize * 7) + (cellMargin * 8) + 15 )
+                        .attr("x", function(d) {
+                            var columns = weeksInMonth(d);
+                            return (((cellSize * columns) + (cellMargin * (columns + 1))) / 2);
+                        })
+                        .attr("text-anchor", "middle")
+                        .text((d) => monthName(d))
+            let distRect = distCanvas.selectAll("rect")
+                                //dataset is Array of the first days of every month
+                                .data(function(d,i) {
+                                    //console.log(d3.timeDays(d, new Date(d.getFullYear(), d.getMonth()+1, 1)))
+                                    return d3.timeDays(d, new Date(d.getFullYear(), d.getMonth()+1, 1))
+                                })
+                                .enter()
+                                .append("rect")
+                                .attr("class", "day")
+                                .attr("width", cellSize).attr("height", cellSize)
+                                .attr("rx", 3).attr("ry", 3)
+                                .attr("fill", '#eaeaea')
+                                .attr("y", (d) => (day(d) * cellSize) + 
+                                                (day(d) * cellMargin) + cellMargin) //day(d) will get you 0(sunday) -> 6(saturday)
+                                .attr("x", (d) => ((week(d) - week(new Date(d.getFullYear(),d.getMonth(),1))) * cellSize) + 
+                                                ((week(d) - week(new Date(d.getFullYear(),d.getMonth(),1))) * cellMargin) + cellMargin)
+                                .on("mouseover", function(d) {
+                                    d3.select(this).classed('hover', true)
+                                })
+                                .on("mouseout", function(d) {
+                                    d3.select(this).classed('hover', false);
+                                })
+                                .datum(format)
+            distRect.append("title")
+                                .text((d) => titleFormat(new Date(d)))
+            
+            var distLookup = d3.nest()
+                                .key((d) => format(new Date(d[0])))
+                                .rollup(function(d) { return d3.mean(d, (d) => d[1])})
+                                .object(distArr)
+            console.log(distLookup)
+            console.log(Object.values(distLookup))
+    
+            const longest =  metersToMiles(Math.max(...Object.values(distLookup)));
+            const shortest = metersToMiles(Math.min(...Object.values(distLookup)));
+            console.log(shortest)
+            console.log(longest)
+
+            var distScale = d3.scaleLinear()
+                            .domain([shortest, longest])
+                            .range([50, 255]);
+            
+            //console.log(distColor(distScale(2)));
+            distRect.filter(function(d) {
+                                //console.log(d in distLookup); 
+                                return d in distLookup;
+                            })
+                    .style("fill", 
+                            function(d) { 
+                                console.log(distLookup[d])
+                                //console.log(distColor(distScale(distLookup[d])));
+                                return distColor(distScale(metersToMiles(distLookup[d]))); 
+                            })
+                    .select("title")
+                    .text(function(d) { return titleFormat(new Date(d)) + "\n" +  metersToMiles(distLookup[d]) + " miles"; });    
+            
+
+            console.log(longest, shortest)
+            let distKeyArr = [];
+            for (let i = shortest; i <= longest; i++){
+                distKeyArr.push([(i-shortest), i])
+            }
+            console.log(distKeyArr)
+            
+            const distKeyCanvas = d3.select("#dist-key")
+                    .append("svg")
+                    .attr("width", 200)
+                    .attr("height", 100)
+
+            distKeyCanvas.selectAll("text")
+                        .data(distKeyArr)
+                        .enter()
+                        .append("text")
+                        .attr("class", "name")
+                        .attr("fill", "black")
+                        .attr("y", 70)
+                        .attr("x", (d) => cellSize/2 + (d[0] * cellSize) + (d[0] * cellMargin) + cellMargin)
+                        .text((d) => d[1])
+                        .attr("text-anchor", "middle")
+            
+            let distKeyRect = distKeyCanvas.selectAll("rect")
+                                            .data(distKeyArr)
+                                            .enter()
+                                            .append("rect")
+                                            .attr("width", cellSize).attr("height", cellSize)
+                                                        .attr("fill", (d) => {
+                                                            return distColor(distScale(d[1]))
+                                                        }) 
+                                            .attr("x", (d) => (d[0] * cellSize) + (d[0] * cellMargin) + cellMargin)
+                                            .attr("y", 30)
+                                            .attr("rx", 3).attr("ry", 3)
+                                            .on("mouseover", function(d) {
+                                                d3.select(this).classed('hover', true)
+                                            })
+                                            .on("mouseout", function(d) {
+                                                d3.select(this).classed('hover', false);
+                                            })  
+
+            distKeyRect.append("title")
+                        .text((d) => `${d[1]} mile(s)`)
+                                                                 
+            distKeyCanvas.append("text")
+                            .attr("class", "name") 
+                            .attr("y", 20)       
+                            .attr("x", ((distKeyArr.length * cellSize) + (distKeyArr.length * cellMargin) + cellMargin) / 2)
+                            .text("Total Distance (Miles)")    
+                            .attr("text-anchor", "middle")
+            
+    
     });
 }
 reAuthPersonal();
+
+
