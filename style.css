@@ -11,6 +11,18 @@ body {
     box-shadow: 0px 1px 37px 11px rgba(203,210,211,0.5);
 }
 
+#desc-container{
+  display: flex;
+  justify-content: space-evenly;
+}
+
+#proj-desc{
+  font-family: Arial, Helvetica, sans-serif;
+  color: #6B6B6B;
+  align-self: center;
+  padding: 10px;
+}
+
 #map-container{
     display: flex;
     align-items: center;
