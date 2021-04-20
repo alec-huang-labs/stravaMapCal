@@ -16,6 +16,10 @@ function reAuthPersonal(){
         .then(response => getActivities(response))
 }
 
+//test
+function hello(){
+    console.log("hello")
+}
 function getActivities(res) {
     const activities_link = `https://www.strava.com/api/v3/athlete/activities?access_token=${res.access_token}&per_page=200`;
     fetch(activities_link)
